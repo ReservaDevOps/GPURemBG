@@ -175,9 +175,8 @@ class U2NETImpl(torch.nn.Module):
 
 class U2NETMatting(MattingModel):
     MODEL_NAME = "u2net"
-    WEIGHTS_URL = (
-        "https://github.com/xuebinqin/U-2-Net/releases/download/v1.0/u2net.pth"
-    )
+    WEIGHTS_URL = None
+    WEIGHTS_GDRIVE_ID = "1ao1ovG_F3fA_kL-2P8VK_z9Dy3km5iQV"
     SUPPORTS_FP16 = True
     DEFAULT_SIZE = 1024
 
@@ -233,9 +232,7 @@ class U2NETMatting(MattingModel):
 
 class U2NETPMatting(U2NETMatting):
     MODEL_NAME = "u2netp"
-    WEIGHTS_URL = (
-        "https://github.com/xuebinqin/U-2-Net/releases/download/v1.0/u2netp.pth"
-    )
+    WEIGHTS_GDRIVE_ID = "1rbSTGKAE-MTxBYHd-51l2hMOQPT_7EPy"
 
     def build_model(self) -> torch.nn.Module:
         return U2NETImpl(3, 1, base=16)

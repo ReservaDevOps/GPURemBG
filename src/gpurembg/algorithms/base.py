@@ -23,11 +23,12 @@ class MattingModel(abc.ABC):
     """
 
     MODEL_NAME: ClassVar[str]
-    WEIGHTS_URL: ClassVar[str]
+    WEIGHTS_URL: ClassVar[Optional[str]]
     WEIGHTS_SHA256: ClassVar[Optional[str]] = None
     DEFAULT_SIZE: ClassVar[int] = 512
     SUPPORTS_FP16: ClassVar[bool] = True
     WEIGHTS_EXTENSION: ClassVar[str] = ".pth"
+    WEIGHTS_GDRIVE_ID: ClassVar[Optional[str]] = None
 
     def __init__(
         self,
@@ -56,7 +57,27 @@ class MattingModel(abc.ABC):
             if sha256_file(path) == cls.WEIGHTS_SHA256.lower():
                 return path
 
-        return download_file(cls.WEIGHTS_URL, path, cls.WEIGHTS_SHA256)
+        last_exc: Optional[Exception] = None
+
+        if getattr(cls, "WEIGHTS_URL", None):
+            try:
+                return download_file(cls.WEIGHTS_URL, path, cls.WEIGHTS_SHA256)
+            except Exception as exc:  # pragma: no cover - network failure is runtime only
+                last_exc = exc
+
+        if cls.WEIGHTS_GDRIVE_ID:
+            from ..utils.downloads import download_google_drive_file
+
+            return download_google_drive_file(
+                cls.WEIGHTS_GDRIVE_ID,
+                path,
+                cls.WEIGHTS_SHA256,
+            )
+
+        if last_exc is not None:
+            raise last_exc
+
+        raise RuntimeError(f"No download source available for model '{cls.MODEL_NAME}'.")
 
     def _load(self, root: Path) -> torch.nn.Module:
         weights = self.ensure_weights(root)
@@ -79,7 +100,6 @@ class MattingModel(abc.ABC):
     def preprocess(self, image: Image.Image) -> PreprocessResult:
         ...
 
-    @abc.abstractmethod
     @abc.abstractmethod
     def extract_alpha(self, raw_output: torch.Tensor) -> torch.Tensor:
         ...

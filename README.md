@@ -60,6 +60,19 @@ python -m gpurembg.cli \
 
 Os resultados são salvos em subpastas (uma por modelo) dentro do diretório de saída, sempre em PNG RGBA.
 
+### Pesos pré-baixados (opcional)
+Caso prefira baixar os pesos manualmente (por exemplo, direto do Google Drive):
+
+1. Baixe os arquivos `*.pth` e `*.onnx`.
+2. Coloque-os em `~/.cache/gpurembg/` (padrão) ou em qualquer pasta apontada por `--weights-dir`.
+3. Use exatamente estes nomes:
+   - `u2net.pth`
+   - `u2netp.pth`
+   - `isnet-general-use.onnx`
+   - `rmbg-1.4.onnx`
+
+O pipeline detecta automaticamente os arquivos existentes e pula o download.
+
 ## Algoritmos incluídos
 | Nome      | Framework       | Qualidade | Desempenho | Observações |
 |-----------|-----------------|-----------|------------|-------------|
