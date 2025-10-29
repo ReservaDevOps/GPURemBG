@@ -113,10 +113,15 @@ class MattingModel(abc.ABC):
     def forward(self, image: Image.Image) -> Image.Image:
         tensors = self.preprocess(image)
 
-        with torch.inference_mode(), torch.cuda.amp.autocast(
-            enabled=self.use_fp16, device_type="cuda"
-        ):
-            raw = self.model(tensors.tensor)
+        autocast_ctx = (
+            torch.autocast("cuda", enabled=self.use_fp16)
+            if hasattr(torch, "autocast")
+            else torch.cuda.amp.autocast(enabled=self.use_fp16)
+        )
+
+        with torch.inference_mode():
+            with autocast_ctx:
+                raw = self.model(tensors.tensor)
 
         alpha = self.extract_alpha(raw)
         return self.postprocess(alpha, tensors.meta)
