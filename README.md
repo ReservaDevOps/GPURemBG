@@ -36,6 +36,7 @@ pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
 Depois instale as dependências do projeto:
 ```bash
 pip install -r requirements.txt
+pip install -e .
 ```
 
 ## Uso – processamento em lote
