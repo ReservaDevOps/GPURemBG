@@ -30,6 +30,9 @@ class ONNXMattingModel(MattingModel):
         self.output_name: str | None = None
         super().__init__(weights_root, device, use_fp16=False)
 
+    def build_model(self) -> torch.nn.Module:
+        return torch.nn.Identity()
+
     def _load(self, root: Path) -> torch.nn.Module:
         onnx_path = self.ensure_weights(root)
         device_id = self.device.index if self.device.index is not None else 0
@@ -106,6 +109,6 @@ class ONNXMattingModel(MattingModel):
             mode="bilinear",
             align_corners=False,
         )[0, 0]
-        alpha = alpha.clamp(0, 1)
+        alpha = torch.nan_to_num(alpha, nan=0.0, posinf=1.0, neginf=0.0).clamp(0, 1)
         alpha_img = (alpha.cpu().numpy() * 255).astype("uint8")
         return Image.fromarray(alpha_img, mode="L")

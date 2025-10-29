@@ -482,7 +482,7 @@ class U2NETMatting(MattingModel):
             mode="bilinear",
             align_corners=False,
         )[0, 0]
-        alpha = alpha.clamp(0, 1)
+        alpha = torch.nan_to_num(alpha, nan=0.0, posinf=1.0, neginf=0.0).clamp(0, 1)
         alpha_img = (alpha.cpu().numpy() * 255).astype("uint8")
         return Image.fromarray(alpha_img, mode="L")
 
