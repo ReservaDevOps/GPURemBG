@@ -1,0 +1,12 @@
+# Virtualenvs
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# IDE metadata
+.idea/
+
+# Local weight caches
+.cache/
