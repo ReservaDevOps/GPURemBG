@@ -70,7 +70,7 @@ Caso prefira baixar os pesos manualmente (por exemplo, direto do Google Drive):
    - `u2net.pth`
    - `u2netp.pth`
    - `isnet-general-use.onnx`
-   - `rmbg-1.4.onnx`
+   - `rmbg-1.4.onnx` (pode ser baixado em https://huggingface.co/briaai/RMBG-1.4 )
 
 O pipeline detecta automaticamente os arquivos existentes e pula o download.
 
