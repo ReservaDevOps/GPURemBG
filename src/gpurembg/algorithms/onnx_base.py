@@ -18,7 +18,7 @@ class ONNXMattingModel(MattingModel):
     Shared ONNXRuntime-backed matting implementation.
     """
 
-    DEFAULT_SIZE: int = 1536
+    DEFAULT_SIZE: int = 1024
     NORMALIZE_MEAN: Tuple[float, float, float] = (0.5, 0.5, 0.5)
     NORMALIZE_STD: Tuple[float, float, float] = (0.5, 0.5, 0.5)
     OUTPUT_SIGMOID: bool = True
@@ -60,13 +60,18 @@ class ONNXMattingModel(MattingModel):
 
     def preprocess(self, image: Image.Image) -> PreprocessResult:
         image = image.convert("RGB")
-        orig_size = torch.tensor([image.height, image.width], dtype=torch.int64)
+        orig_h, orig_w = image.height, image.width
+        input_size = self.DEFAULT_SIZE
 
-        max_side = float(orig_size.max())
-        scale = min(self.DEFAULT_SIZE / max_side, 1.0)
-        new_size = (orig_size.float() * scale).to(torch.int64)
-        if scale != 1.0:
-            image = image.resize((new_size[1].item(), new_size[0].item()), Image.BILINEAR)
+        scale = min(1.0, input_size / float(max(orig_h, orig_w)))
+        resized_h = max(int(round(orig_h * scale)), 1)
+        resized_w = max(int(round(orig_w * scale)), 1)
+        resized = image.resize((resized_w, resized_h), Image.BILINEAR)
+
+        canvas = Image.new("RGB", (input_size, input_size), (0, 0, 0))
+        pad_top = (input_size - resized_h) // 2
+        pad_left = (input_size - resized_w) // 2
+        canvas.paste(resized, (pad_left, pad_top))
 
         transform = transforms.Compose(
             [
@@ -74,10 +79,14 @@ class ONNXMattingModel(MattingModel):
                 transforms.Normalize(mean=self.NORMALIZE_MEAN, std=self.NORMALIZE_STD),
             ]
         )
-        tensor = transform(image).unsqueeze(0)
+        tensor = transform(canvas).unsqueeze(0)
         return PreprocessResult(
             tensor=tensor.to(self.device),
-            meta={"orig_size": orig_size.to(self.device)},
+            meta={
+                "orig_size": torch.tensor([orig_h, orig_w], dtype=torch.int64, device=self.device),
+                "resized_size": torch.tensor([resized_h, resized_w], dtype=torch.int64, device=self.device),
+                "pad": torch.tensor([pad_top, pad_left], dtype=torch.int64, device=self.device),
+            },
         )
 
     def extract_alpha(self, raw_output: torch.Tensor) -> torch.Tensor:
@@ -103,6 +112,14 @@ class ONNXMattingModel(MattingModel):
     def postprocess(self, alpha_pred: torch.Tensor, meta: Dict[str, torch.Tensor]) -> Image.Image:
         alpha = alpha_pred[0, 0]
         orig_h, orig_w = meta["orig_size"].cpu().tolist()
+        resized_h, resized_w = meta["resized_size"].cpu().tolist()
+        pad_top, pad_left = meta["pad"].cpu().tolist()
+
+        alpha = alpha[
+            pad_top : pad_top + resized_h,
+            pad_left : pad_left + resized_w,
+        ]
+
         alpha = F.interpolate(
             alpha.unsqueeze(0).unsqueeze(0),
             size=(orig_h, orig_w),

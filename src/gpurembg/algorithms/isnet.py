@@ -12,4 +12,4 @@ class ISNetMatting(ONNXMattingModel):
         "isnet-general-use.onnx"
     )
     SUPPORTS_FP16 = False
-    DEFAULT_SIZE = 1536
+    DEFAULT_SIZE = 1024

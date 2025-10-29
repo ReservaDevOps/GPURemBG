@@ -434,7 +434,7 @@ class U2NETMatting(MattingModel):
     MODEL_NAME = "u2net"
     WEIGHTS_URL = None
     WEIGHTS_GDRIVE_ID = "1ao1ovG_F3fA_kL-2P8VK_z9Dy3km5iQV"
-    SUPPORTS_FP16 = True
+    SUPPORTS_FP16 = False
     DEFAULT_SIZE = 1024
 
     def build_model(self) -> torch.nn.Module:
@@ -453,7 +453,6 @@ class U2NETMatting(MattingModel):
         transform = transforms.Compose(
             [
                 transforms.ToTensor(),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
             ]
         )
 
@@ -490,6 +489,7 @@ class U2NETMatting(MattingModel):
 class U2NETPMatting(U2NETMatting):
     MODEL_NAME = "u2netp"
     WEIGHTS_GDRIVE_ID = "1rbSTGKAE-MTxBYHd-51l2hMOQPT_7EPy"
+    SUPPORTS_FP16 = False
 
     def build_model(self) -> torch.nn.Module:
         return U2NETP(3, 1)
