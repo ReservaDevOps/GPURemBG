@@ -54,9 +54,11 @@ python -m gpurembg.cli \
 ```
 
 ### Parâmetros úteis
-- `--models`: escolha uma ou mais opções dentre `u2net`, `u2netp`, `isnet`, `rmbg14`.
+- `--models`: escolha uma ou mais opções dentre `u2net`, `u2netp`, `u2net-portrait`, `u2net-human`, `isnet`, `rmbg14`.
 - `--no-fp16`: desativa FP16 (útil para debug).
 - `--alpha-threshold 0.9`: aplica um corte duro na máscara.
+- `--refine-dilate 2`: adiciona dilatações 3x3 para recuperar contornos perdidos.
+- `--refine-feather 3`: suaviza bordas com blur gaussiano (usa raio em pixels).
 - `--json report.json`: salva estatísticas (número de imagens, tempo total e médio por modelo).
 
 Os resultados são salvos em subpastas (uma por modelo) dentro do diretório de saída, sempre em PNG RGBA.
@@ -69,6 +71,8 @@ Caso prefira baixar os pesos manualmente (por exemplo, direto do Google Drive):
 3. Use exatamente estes nomes:
    - `u2net.pth`
    - `u2netp.pth`
+   - `u2net_portrait.pth`
+   - `u2net_human_seg.pth`
    - `isnet-general-use.onnx`
    - `rmbg-1.4.onnx` (pode ser baixado em https://huggingface.co/briaai/RMBG-1.4 )
 
@@ -77,9 +81,11 @@ O pipeline detecta automaticamente os arquivos existentes e pula o download.
 ## Algoritmos incluídos
 | Nome      | Framework       | Qualidade | Desempenho | Observações |
 |-----------|-----------------|-----------|------------|-------------|
-| `u2net`   | PyTorch (FP16)  | Muito alta| Médio      | Modelo clássico com resultados sólidos. |
-| `u2netp`  | PyTorch (FP16)  | Boa       | Alto       | Versão compacta; ideal para lotes grandes. |
-| `isnet`   | ONNX Runtime    | Altíssima | Alto       | IS-Net general-use; corta em 1536px. |
+| `u2net`   | PyTorch (FP32)  | Alta      | Médio      | Versão base, agressiva em áreas complexas. |
+| `u2netp`  | PyTorch (FP32)  | Boa       | Alto       | Versão compacta; ideal para lotes grandes. |
+| `u2net-portrait` | PyTorch (FP32) | Alta | Médio | Treinado para retratos; preserva cabelo. |
+| `u2net-human` | PyTorch (FP32) | Alta | Médio | Segmentação corporal completa. |
+| `isnet`   | ONNX Runtime    | Altíssima | Alto       | IS-Net general-use; opera em 1024px. |
 | `rmbg14`  | ONNX Runtime    | Alta      | Muito alto | Novo modelo rápido do projeto rembg. |
 
 Todos os modelos baixam pesos automaticamente para `~/.cache/gpurembg`.  

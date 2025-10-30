@@ -7,7 +7,12 @@ from torchvision import transforms
 
 from .base import MattingModel, PreprocessResult
 
-__all__ = ["U2NETMatting", "U2NETPMatting"]
+__all__ = [
+    "U2NETMatting",
+    "U2NETPMatting",
+    "U2NETPortraitMatting",
+    "U2NETHumanMatting",
+]
 
 
 class REBNCONV(torch.nn.Module):
@@ -493,3 +498,15 @@ class U2NETPMatting(U2NETMatting):
 
     def build_model(self) -> torch.nn.Module:
         return U2NETP(3, 1)
+
+
+class U2NETPortraitMatting(U2NETMatting):
+    MODEL_NAME = "u2net_portrait"
+    WEIGHTS_GDRIVE_ID = "1IG3HdpcRiDoWNookbncQjeaPN28t90yW"
+    SUPPORTS_FP16 = False
+
+
+class U2NETHumanMatting(U2NETMatting):
+    MODEL_NAME = "u2net_human_seg"
+    WEIGHTS_GDRIVE_ID = "1N7abitNTB7uHm-bL8hZ5wfQRO_DTrdPp"
+    SUPPORTS_FP16 = False

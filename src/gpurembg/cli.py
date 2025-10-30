@@ -30,7 +30,10 @@ def parse_args() -> argparse.Namespace:
         nargs="+",
         default=["u2net"],
         choices=list(MODEL_REGISTRY.keys()),
-        help="List of models to benchmark.",
+        help=(
+            "List of models to benchmark. Available: "
+            + ", ".join(MODEL_REGISTRY.keys())
+        ),
     )
     parser.add_argument(
         "--weights-dir",
@@ -62,6 +65,18 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=None,
         help="Optional hard threshold [0,1] applied to the alpha matte.",
+    )
+    parser.add_argument(
+        "--refine-dilate",
+        type=int,
+        default=0,
+        help="Optional number of 3x3 dilation iterations applied after thresholding.",
+    )
+    parser.add_argument(
+        "--refine-feather",
+        type=int,
+        default=0,
+        help="Optional gaussian blur radius (pixels) to feather mask edges.",
     )
     parser.add_argument(
         "--no-refine",
@@ -104,6 +119,8 @@ def run() -> None:
             device=args.device,
             alpha_threshold=args.alpha_threshold,
             refine_foreground=args.refine_foreground,
+            refine_dilate=max(0, args.refine_dilate),
+            refine_feather=max(0, args.refine_feather),
         )
         remover = BackgroundRemover(config)
         model_output = args.output_dir / model_name
