@@ -79,6 +79,17 @@ def parse_args() -> argparse.Namespace:
         help="Optional gaussian blur radius (pixels) to feather mask edges.",
     )
     parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=1,
+        help="Number of images to process per forward pass (models permitting).",
+    )
+    parser.add_argument(
+        "--tensorrt",
+        action="store_true",
+        help="Attempt to run ONNX models via TensorRT execution provider (requires onnxruntime-gpu with TensorRT).",
+    )
+    parser.add_argument(
         "--no-refine",
         dest="refine_foreground",
         action="store_false",
@@ -125,8 +136,15 @@ def run() -> None:
             refine_foreground=args.refine_foreground,
             refine_dilate=max(0, args.refine_dilate),
             refine_feather=max(0, args.refine_feather),
+            batch_size=max(1, args.batch_size),
+            use_tensorrt=args.tensorrt,
         )
         remover = BackgroundRemover(config)
+        if hasattr(remover.model, "session") and getattr(remover.model, "session") is not None:
+            providers = remover.model.session.get_providers()  # type: ignore[arg-type]
+            print(f"    Execution providers: {providers}")
+        else:
+            print(f"    Using device: {config.device}")
         model_output = args.output_dir / model_name
         model_output.mkdir(parents=True, exist_ok=True)
         timings = remover.process_directory(

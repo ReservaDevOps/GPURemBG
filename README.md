@@ -58,6 +58,8 @@ python -m gpurembg.cli \
 - `--alpha-threshold 0.9`: aplica um corte duro na máscara.
 - `--refine-dilate 2`: adiciona dilatações 3x3 para recuperar contornos perdidos.
 - `--refine-feather 3`: suaviza bordas com blur gaussiano (usa raio em pixels).
+- `--batch-size 4`: processa imagens em lotes (melhor throughput em GPUs com memória).
+- `--tensorrt`: tenta usar o TensorRT Execution Provider (requer onnxruntime-gpu compilado com TensorRT).
 - `--json report.json`: salva estatísticas (número de imagens, tempo total e médio por modelo).
 
 Os resultados são salvos em subpastas (uma por modelo) dentro do diretório de saída, sempre em PNG RGBA.
@@ -97,6 +99,7 @@ Os backends ONNX usam `onnxruntime-gpu` e executam diretamente na CUDA.
   ```bash
   watch -n 1 nvidia-smi
   ```
+- Ao usar `--tensorrt`, confira no console a linha `Execution providers: ['TensorrtExecutionProvider', 'CUDAExecutionProvider']` para validar que o engine está ativo.
 
 ## Boas práticas de performance
 1. Mantenha os drivers e o CUDA Toolkit atualizados.

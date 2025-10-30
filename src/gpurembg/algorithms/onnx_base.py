@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, Tuple
+import logging
+from typing import Dict, List, Sequence, Tuple
 
 import numpy as np
 import onnxruntime as ort
@@ -24,10 +25,17 @@ class ONNXMattingModel(MattingModel):
     OUTPUT_SIGMOID: bool = True
     WEIGHTS_EXTENSION: str = ".onnx"
 
-    def __init__(self, weights_root: Path, device: torch.device, use_fp16: bool = False) -> None:
+    def __init__(
+        self,
+        weights_root: Path,
+        device: torch.device,
+        use_fp16: bool = False,
+        use_tensorrt: bool = False,
+    ) -> None:
         self.session: ort.InferenceSession | None = None
         self.input_name: str | None = None
         self.output_name: str | None = None
+        self.use_tensorrt = use_tensorrt
         super().__init__(weights_root, device, use_fp16=False)
 
     def build_model(self) -> torch.nn.Module:
@@ -36,27 +44,52 @@ class ONNXMattingModel(MattingModel):
     def _load(self, root: Path) -> torch.nn.Module:
         onnx_path = self.ensure_weights(root)
         device_id = self.device.index if self.device.index is not None else 0
-        providers = [
-            (
-                "CUDAExecutionProvider",
-                {
-                    "device_id": device_id,
-                    "arena_extend_strategy": "kNextPowerOfTwo",
-                    "cudnn_conv_use_max_workspace": "1",
-                    "do_copy_in_default_stream": "1",
-                },
-            )
-        ]
-        session = ort.InferenceSession(onnx_path.as_posix(), providers=providers)
+
+        session_options = ort.SessionOptions()
+        session_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+
+        providers = self._build_providers(device_id)
+        provider_names = [name for name, _ in providers]
+        provider_options = [options for _, options in providers]
+
+        session = ort.InferenceSession(
+            onnx_path.as_posix(),
+            sess_options=session_options,
+            providers=provider_names,
+            provider_options=provider_options,
+        )
         if "CUDAExecutionProvider" not in session.get_providers():
             raise RuntimeError(
                 "onnxruntime did not initialize the CUDAExecutionProvider. "
                 "Install `onnxruntime-gpu` and ensure the NVIDIA driver/CUDA stack is available."
             )
+        if self.use_tensorrt and "TensorrtExecutionProvider" not in session.get_providers():
+            logging.warning(
+                "TensorRT Execution Provider requested but not available; falling back to CUDA."
+            )
         self.session = session
         self.input_name = session.get_inputs()[0].name
         self.output_name = session.get_outputs()[0].name
         return torch.nn.Identity()
+
+    def _build_providers(self, device_id: int) -> List[Tuple[str, Dict[str, str]]]:
+        cuda_options = {
+            "device_id": device_id,
+            "arena_extend_strategy": "kNextPowerOfTwo",
+            "cudnn_conv_use_max_workspace": "1",
+            "do_copy_in_default_stream": "1",
+        }
+        providers: List[Tuple[str, Dict[str, str]]] = [("CUDAExecutionProvider", cuda_options)]
+
+        if self.use_tensorrt:
+            trt_options = {
+                "device_id": device_id,
+                "trt_fp16_enable": "1",
+                "trt_max_workspace_size": str(1 << 30),
+            }
+            providers.insert(0, ("TensorrtExecutionProvider", trt_options))
+
+        return providers
 
     def preprocess(self, image: Image.Image) -> PreprocessResult:
         image = image.convert("RGB")
@@ -94,6 +127,27 @@ class ONNXMattingModel(MattingModel):
         if self.OUTPUT_SIGMOID:
             alpha = torch.sigmoid(alpha)
         return self.postprocess(alpha, tensors.meta)
+
+    def forward_batch(self, images: Sequence[Image.Image]) -> List[Image.Image]:
+        if self.session is None or self.input_name is None or self.output_name is None:
+            raise RuntimeError("ONNX session not initialized.")
+
+        tensors = [self.preprocess(image) for image in images]
+        batch = torch.cat([item.tensor for item in tensors], dim=0)
+        ort_inputs = {
+            self.input_name: batch.detach().to("cpu").numpy().astype(np.float32)
+        }
+        outputs = self.session.run([self.output_name], ort_inputs)[0]
+
+        alphas = torch.from_numpy(outputs).to(self.device)
+        if self.OUTPUT_SIGMOID:
+            alphas = torch.sigmoid(alphas)
+
+        results: List[Image.Image] = []
+        for idx, meta in enumerate([item.meta for item in tensors]):
+            alpha = alphas[idx : idx + 1]
+            results.append(self.postprocess(alpha, meta))
+        return results
 
     def postprocess(self, alpha_pred: torch.Tensor, meta: Dict[str, torch.Tensor]) -> Image.Image:
         alpha = alpha_pred[0, 0]

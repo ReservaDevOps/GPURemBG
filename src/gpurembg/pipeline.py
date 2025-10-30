@@ -12,6 +12,7 @@ from PIL import Image
 from torchvision.transforms import functional as TF
 
 from .algorithms.base import MattingModel
+from .algorithms.onnx_base import ONNXMattingModel
 from .algorithms.isnet import ISNetMatting
 from .algorithms.rmbg import RMBG14Matting
 from .algorithms.u2net import (
@@ -42,6 +43,8 @@ class MattingConfig:
     refine_foreground: bool = True
     refine_dilate: int = 0
     refine_feather: int = 0
+    batch_size: int = 1
+    use_tensorrt: bool = False
 
     def torch_device(self) -> torch.device:
         return torch.device(self.device)
@@ -61,11 +64,19 @@ class BackgroundRemover:
             raise ValueError(f"Unknown model '{config.model_name}'. Choices: {list(MODEL_REGISTRY)}")
 
         model_cls = MODEL_REGISTRY[config.model_name]
-        self.model = model_cls(
-            config.weights_dir,
-            device,
-            config.use_fp16,
-        )
+        if issubclass(model_cls, ONNXMattingModel):
+            self.model = model_cls(
+                config.weights_dir,
+                device,
+                config.use_fp16,
+                use_tensorrt=config.use_tensorrt,
+            )
+        else:
+            self.model = model_cls(
+                config.weights_dir,
+                device,
+                config.use_fp16,
+            )
         self.device = device
 
     def predict_alpha(self, image: Image.Image) -> Image.Image:
@@ -74,11 +85,17 @@ class BackgroundRemover:
     def remove_background(self, image: Image.Image) -> Image.Image:
         image_rgb = image.convert("RGB")
         alpha_pred = self.predict_alpha(image_rgb)
+        return self._compose_image(image_rgb, alpha_pred)
 
-        alpha_np = np.array(alpha_pred, dtype=np.float32) / 255.0
+    def predict_alpha_batch(self, images: List[Image.Image]) -> List[Image.Image]:
+        return self.model.forward_batch(images)
 
-        if self.config.alpha_threshold is not None:
-            threshold = max(0.0, min(1.0, self.config.alpha_threshold))
+    def _process_alpha_np(self, alpha_np: np.ndarray) -> np.ndarray:
+        alpha_np = np.clip(alpha_np, 0.0, 1.0)
+
+        threshold = self.config.alpha_threshold
+        if threshold is not None:
+            threshold = max(0.0, min(1.0, threshold))
             alpha_np = (alpha_np >= threshold).astype(np.float32)
 
         if self.config.refine_dilate > 0 or self.config.refine_feather > 0:
@@ -93,9 +110,16 @@ class BackgroundRemover:
                     alpha_tensor = F.max_pool2d(alpha_tensor, kernel_size=3, stride=1, padding=1)
             if self.config.refine_feather > 0:
                 kernel = 2 * self.config.refine_feather + 1
-                alpha_tensor = TF.gaussian_blur(alpha_tensor, kernel_size=kernel, sigma=self.config.refine_feather)
+                alpha_tensor = TF.gaussian_blur(
+                    alpha_tensor, kernel_size=kernel, sigma=self.config.refine_feather
+                )
             alpha_np = alpha_tensor.squeeze().clamp(0, 1).detach().cpu().numpy()
 
+        return alpha_np
+
+    def _compose_image(self, image_rgb: Image.Image, alpha_image: Image.Image) -> Image.Image:
+        alpha_np = np.array(alpha_image, dtype=np.float32) / 255.0
+        alpha_np = self._process_alpha_np(alpha_np)
         alpha = Image.fromarray((alpha_np * 255).astype("uint8"), mode="L")
 
         if self.config.refine_foreground:
@@ -123,16 +147,39 @@ class BackgroundRemover:
 
         timings: Dict[str, float] = {}
 
+        batch_size = max(1, self.config.batch_size)
+        batch: List[Path] = []
+
+        def flush(current_batch: List[Path]) -> None:
+            if not current_batch:
+                return
+            batch_start = time.perf_counter()
+            images_rgb: List[Image.Image] = []
+            for path in current_batch:
+                with Image.open(path) as img:
+                    images_rgb.append(img.convert("RGB"))
+
+            alphas = self.predict_alpha_batch(images_rgb)
+            results = [self._compose_image(img_rgb, alpha) for img_rgb, alpha in zip(images_rgb, alphas)]
+            batch_end = time.perf_counter()
+            per_image = (batch_end - batch_start) / len(current_batch)
+
+            for path, result in zip(current_batch, results):
+                destination = output_dir / (path.stem + ".png")
+                result.save(destination)
+                timings[str(path)] = per_image
+
         for image_path in sorted(self._iter_images(input_dir)):
             destination = output_dir / (image_path.stem + ".png")
             if destination.exists() and not overwrite:
                 continue
-            start = time.perf_counter()
-            image = Image.open(image_path)
-            result = self.remove_background(image)
-            result.save(destination)
-            end = time.perf_counter()
-            timings[str(image_path)] = end - start
+            batch.append(image_path)
+            if len(batch) >= batch_size:
+                flush(batch)
+                batch = []
+
+        if batch:
+            flush(batch)
 
         return timings
 

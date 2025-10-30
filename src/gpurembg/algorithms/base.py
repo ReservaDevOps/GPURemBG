@@ -3,7 +3,7 @@ from __future__ import annotations
 import abc
 from dataclasses import dataclass
 from pathlib import Path
-from typing import ClassVar, Dict, Iterable, Optional
+from typing import ClassVar, Dict, Iterable, List, Optional, Sequence
 
 import torch
 from PIL import Image
@@ -125,6 +125,9 @@ class MattingModel(abc.ABC):
 
         alpha = self.extract_alpha(raw)
         return self.postprocess(alpha, tensors.meta)
+
+    def forward_batch(self, images: Sequence[Image.Image]) -> List[Image.Image]:
+        return [self.forward(image) for image in images]
 
     def to(self, device: torch.device) -> None:
         self.device = device
