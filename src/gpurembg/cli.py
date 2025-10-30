@@ -28,7 +28,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--models",
         nargs="+",
-        default=["u2net"],
+        default=["isnet", "rmbg14"],
         choices=list(MODEL_REGISTRY.keys()),
         help=(
             "List of models to benchmark. Available: "
@@ -112,12 +112,16 @@ def run() -> None:
 
     for model_name in args.models:
         print(f"[+] Running model: {model_name}")
+        alpha_threshold = args.alpha_threshold
+        if alpha_threshold is None and model_name in {"isnet", "rmbg14"}:
+            alpha_threshold = 0.6
+
         config = MattingConfig(
             model_name=model_name,
             weights_dir=args.weights_dir,
             use_fp16=args.use_fp16,
             device=args.device,
-            alpha_threshold=args.alpha_threshold,
+            alpha_threshold=alpha_threshold,
             refine_foreground=args.refine_foreground,
             refine_dilate=max(0, args.refine_dilate),
             refine_feather=max(0, args.refine_feather),

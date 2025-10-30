@@ -47,14 +47,13 @@ Execute o pipeline:
 python -m gpurembg.cli \
   --input-dir data/input \
   --output-dir data/output \
-  --models u2net isnet rmbg14 \
+  --models isnet rmbg14 \
   --device cuda:0 \
-  --fp16 \
   --overwrite
 ```
 
 ### Parâmetros úteis
-- `--models`: escolha uma ou mais opções dentre `u2net`, `u2netp`, `u2net-portrait`, `u2net-human`, `isnet`, `rmbg14`.
+- `--models`: escolha uma ou mais opções dentre `u2net`, `u2netp`, `u2net-portrait`, `u2net-human`, `isnet`, `rmbg14`. Por padrão usamos `isnet` e `rmbg14` com threshold automático de 0.6.
 - `--no-fp16`: desativa FP16 (útil para debug).
 - `--alpha-threshold 0.9`: aplica um corte duro na máscara.
 - `--refine-dilate 2`: adiciona dilatações 3x3 para recuperar contornos perdidos.
