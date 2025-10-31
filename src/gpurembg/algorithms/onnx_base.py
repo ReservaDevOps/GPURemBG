@@ -151,6 +151,16 @@ class ONNXMattingModel(MattingModel):
         if self.session is None or self.input_name is None or self.output_name is None:
             raise RuntimeError("ONNX session not initialized.")
 
+        input_shape = self.session.get_inputs()[0].shape
+        static_batch = None
+        if input_shape:
+            first_dim = input_shape[0]
+            if isinstance(first_dim, int):
+                static_batch = first_dim
+
+        if static_batch is not None and static_batch not in (0, len(images)):
+            return [self.forward(image) for image in images]
+
         tensors = [self.preprocess(image) for image in images]
         batch = torch.cat([item.tensor for item in tensors], dim=0)
         ort_inputs = {
