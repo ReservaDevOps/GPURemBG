@@ -48,16 +48,33 @@ class ONNXMattingModel(MattingModel):
         session_options = ort.SessionOptions()
         session_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
 
-        providers = self._build_providers(device_id)
+        providers = self._build_providers(device_id, tensorrt=self.use_tensorrt)
         provider_names = [name for name, _ in providers]
         provider_options = [options for _, options in providers]
 
-        session = ort.InferenceSession(
-            onnx_path.as_posix(),
-            sess_options=session_options,
-            providers=provider_names,
-            provider_options=provider_options,
-        )
+        try:
+            session = ort.InferenceSession(
+                onnx_path.as_posix(),
+                sess_options=session_options,
+                providers=provider_names,
+                provider_options=provider_options,
+            )
+        except Exception as exc:
+            if self.use_tensorrt:
+                logging.warning(
+                    "TensorRT provider failed to initialize; retrying without TensorRT."
+                )
+                providers = self._build_providers(device_id, tensorrt=False)
+                provider_names = [name for name, _ in providers]
+                provider_options = [options for _, options in providers]
+                session = ort.InferenceSession(
+                    onnx_path.as_posix(),
+                    sess_options=session_options,
+                    providers=provider_names,
+                    provider_options=provider_options,
+                )
+            else:
+                raise
         if "CUDAExecutionProvider" not in session.get_providers():
             raise RuntimeError(
                 "onnxruntime did not initialize the CUDAExecutionProvider. "
@@ -72,7 +89,9 @@ class ONNXMattingModel(MattingModel):
         self.output_name = session.get_outputs()[0].name
         return torch.nn.Identity()
 
-    def _build_providers(self, device_id: int) -> List[Tuple[str, Dict[str, str]]]:
+    def _build_providers(
+        self, device_id: int, *, tensorrt: bool
+    ) -> List[Tuple[str, Dict[str, str]]]:
         cuda_options = {
             "device_id": device_id,
             "arena_extend_strategy": "kNextPowerOfTwo",
@@ -81,10 +100,10 @@ class ONNXMattingModel(MattingModel):
         }
         providers: List[Tuple[str, Dict[str, str]]] = [("CUDAExecutionProvider", cuda_options)]
 
-        if self.use_tensorrt:
+        if tensorrt:
             trt_options = {
                 "device_id": device_id,
-                "trt_fp16_enable": "1",
+                "trt_fp16_enable": "True",
                 "trt_max_workspace_size": str(1 << 30),
             }
             providers.insert(0, ("TensorrtExecutionProvider", trt_options))
