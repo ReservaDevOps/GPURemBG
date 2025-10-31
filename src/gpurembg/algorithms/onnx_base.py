@@ -36,6 +36,9 @@ class ONNXMattingModel(MattingModel):
         self.input_name: str | None = None
         self.output_name: str | None = None
         self.use_tensorrt = use_tensorrt
+        self.trt_cache_dir = (weights_root / "trt_cache" / self.MODEL_NAME).expanduser()
+        if use_tensorrt:
+            self.trt_cache_dir.mkdir(parents=True, exist_ok=True)
         super().__init__(weights_root, device, use_fp16=False)
 
     def build_model(self) -> torch.nn.Module:
@@ -105,6 +108,9 @@ class ONNXMattingModel(MattingModel):
                 "device_id": device_id,
                 "trt_fp16_enable": "True",
                 "trt_max_workspace_size": str(1 << 30),
+                "trt_engine_cache_enable": "True",
+                "trt_engine_cache_path": self.trt_cache_dir.as_posix(),
+                "trt_force_sequential_engine_build": "True",
             }
             providers.insert(0, ("TensorrtExecutionProvider", trt_options))
 
