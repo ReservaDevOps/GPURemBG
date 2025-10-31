@@ -126,9 +126,6 @@ class MattingModel(abc.ABC):
         alpha = self.extract_alpha(raw)
         return self.postprocess(alpha, tensors.meta)
 
-    def forward_batch(self, images: Sequence[Image.Image]) -> List[Image.Image]:
-        return [self.forward(image) for image in images]
-
     def to(self, device: torch.device) -> None:
         self.device = device
         self.model.to(device)

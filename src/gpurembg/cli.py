@@ -79,12 +79,6 @@ def parse_args() -> argparse.Namespace:
         help="Optional gaussian blur radius (pixels) to feather mask edges.",
     )
     parser.add_argument(
-        "--batch-size",
-        type=int,
-        default=1,
-        help="Number of images to process per forward pass (models permitting).",
-    )
-    parser.add_argument(
         "--tensorrt",
         action="store_true",
         help="Attempt to run ONNX models via TensorRT execution provider (requires onnxruntime-gpu with TensorRT).",
@@ -136,7 +130,6 @@ def run() -> None:
             refine_foreground=args.refine_foreground,
             refine_dilate=max(0, args.refine_dilate),
             refine_feather=max(0, args.refine_feather),
-            batch_size=max(1, args.batch_size),
             use_tensorrt=args.tensorrt,
         )
         remover = BackgroundRemover(config)

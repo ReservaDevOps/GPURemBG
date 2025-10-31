@@ -58,7 +58,6 @@ python -m gpurembg.cli \
 - `--alpha-threshold 0.9`: aplica um corte duro na máscara.
 - `--refine-dilate 2`: adiciona dilatações 3x3 para recuperar contornos perdidos.
 - `--refine-feather 3`: suaviza bordas com blur gaussiano (usa raio em pixels).
-- `--batch-size 4`: processa imagens em lotes (melhor throughput em GPUs com memória).
 - `--tensorrt`: tenta usar o TensorRT Execution Provider (requer onnxruntime-gpu compilado com TensorRT).
 - `--json report.json`: salva estatísticas (número de imagens, tempo total e médio por modelo).
 

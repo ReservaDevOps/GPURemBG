@@ -153,36 +153,6 @@ class ONNXMattingModel(MattingModel):
             alpha = torch.sigmoid(alpha)
         return self.postprocess(alpha, tensors.meta)
 
-    def forward_batch(self, images: Sequence[Image.Image]) -> List[Image.Image]:
-        if self.session is None or self.input_name is None or self.output_name is None:
-            raise RuntimeError("ONNX session not initialized.")
-
-        input_shape = self.session.get_inputs()[0].shape
-        static_batch = None
-        if input_shape:
-            first_dim = input_shape[0]
-            if isinstance(first_dim, int):
-                static_batch = first_dim
-
-        if static_batch is not None and static_batch not in (0, len(images)):
-            return [self.forward(image) for image in images]
-
-        tensors = [self.preprocess(image) for image in images]
-        batch = torch.cat([item.tensor for item in tensors], dim=0)
-        ort_inputs = {
-            self.input_name: batch.detach().to("cpu").numpy().astype(np.float32)
-        }
-        outputs = self.session.run([self.output_name], ort_inputs)[0]
-
-        alphas = torch.from_numpy(outputs).to(self.device)
-        if self.OUTPUT_SIGMOID:
-            alphas = torch.sigmoid(alphas)
-
-        results: List[Image.Image] = []
-        for idx, meta in enumerate([item.meta for item in tensors]):
-            alpha = alphas[idx : idx + 1]
-            results.append(self.postprocess(alpha, meta))
-        return results
 
     def postprocess(self, alpha_pred: torch.Tensor, meta: Dict[str, torch.Tensor]) -> Image.Image:
         alpha = alpha_pred[0, 0]

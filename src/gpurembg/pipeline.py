@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, Optional
 
 import numpy as np
 import torch
@@ -43,7 +43,6 @@ class MattingConfig:
     refine_foreground: bool = True
     refine_dilate: int = 0
     refine_feather: int = 0
-    batch_size: int = 1
     use_tensorrt: bool = False
 
     def torch_device(self) -> torch.device:
@@ -86,9 +85,6 @@ class BackgroundRemover:
         image_rgb = image.convert("RGB")
         alpha_pred = self.predict_alpha(image_rgb)
         return self._compose_image(image_rgb, alpha_pred)
-
-    def predict_alpha_batch(self, images: List[Image.Image]) -> List[Image.Image]:
-        return self.model.forward_batch(images)
 
     def _process_alpha_np(self, alpha_np: np.ndarray) -> np.ndarray:
         alpha_np = np.clip(alpha_np, 0.0, 1.0)
@@ -147,39 +143,20 @@ class BackgroundRemover:
 
         timings: Dict[str, float] = {}
 
-        batch_size = max(1, self.config.batch_size)
-        batch: List[Path] = []
-
-        def flush(current_batch: List[Path]) -> None:
-            if not current_batch:
-                return
-            batch_start = time.perf_counter()
-            images_rgb: List[Image.Image] = []
-            for path in current_batch:
-                with Image.open(path) as img:
-                    images_rgb.append(img.convert("RGB"))
-
-            alphas = self.predict_alpha_batch(images_rgb)
-            results = [self._compose_image(img_rgb, alpha) for img_rgb, alpha in zip(images_rgb, alphas)]
-            batch_end = time.perf_counter()
-            per_image = (batch_end - batch_start) / len(current_batch)
-
-            for path, result in zip(current_batch, results):
-                destination = output_dir / (path.stem + ".png")
-                result.save(destination)
-                timings[str(path)] = per_image
-
         for image_path in sorted(self._iter_images(input_dir)):
             destination = output_dir / (image_path.stem + ".png")
             if destination.exists() and not overwrite:
                 continue
-            batch.append(image_path)
-            if len(batch) >= batch_size:
-                flush(batch)
-                batch = []
 
-        if batch:
-            flush(batch)
+            start = time.perf_counter()
+            with Image.open(image_path) as img:
+                image_rgb = img.convert("RGB")
+                alpha = self.predict_alpha(image_rgb)
+                result = self._compose_image(image_rgb, alpha)
+
+            result.save(destination)
+            end = time.perf_counter()
+            timings[str(image_path)] = end - start
 
         return timings
 
